@@ -1,6 +1,8 @@
 -- Auto Block + Auto Punish + Auto Counter - JUN + SHINJI + MARTIAL ARTIST
 -- Versión actualizada: Diciembre 2025
--- Audio de Shinji solo se detecta si el emisor está cerca
+-- Mejoras: Delays ajustados para M1s de Shinji (3ro: 0.4s, 4to: 0.5s)
+-- Auto counter mejorado: Detección detrás más sensible (ángulo estrict behind bajado a 140 por default, distancias ajustadas)
+-- Detección M1 detrás: Prioridad alta y chequeo explícito para todas anims seleccionadas
 
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
@@ -15,7 +17,7 @@ Library.ShowToggleFrameInKeybinds = true
 
 local Window = Library:CreateWindow({
     Title = "Auto Block + Punish + Counter",
-    Footer = "JUN + SHINJI + MARTIAL ARTIST - Updated 2025",
+    Footer = "JUN + SHINJI + MARTIAL ARTIST - Updated 2025.12.28",
     Icon = 95816097006870,
     NotifySide = "Right",
     ShowCustomCursor = true,
@@ -82,7 +84,7 @@ SettingsGroup:AddSlider("AngleThreshold", {
 
 SettingsGroup:AddSlider("StrictBehindAngle", {
     Text = "Strict Behind Angle",
-    Default = 150,
+    Default = 140,  -- Bajado de 150 a 140 para detección más sensible detrás
     Min = 120,
     Max = 180,
     Rounding = 0,
@@ -111,30 +113,30 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 local animTypes = {
-    ["95971182752543"] = "normal",
-    ["74711059252371"] = "normal",
-    ["129048750359824"] = "normal",
-    ["129536653447724"] = "normal",
-    ["18542392001"] = "direct",
-    ["18681089831"] = "block_02",
-    ["18955032062"] = "block_04",
-    ["103530817046655"] = "block_120",
-    ["76966635202046"] = "normal",
-    ["102448117900479"] = "normal",
-    ["111296208946579"] = "normal",
-    ["100278816358393"] = "normal",
-    ["125348562455925"] = "block_120",
-    ["126102858255615"] = "block_10",
-    ["102273007149848"] = "direct",
-    ["18193105588"] = "normal",
+    ["95971182752543"] = "normal",   -- Jun M1 1
+    ["74711059252371"] = "normal",   -- Jun M1 2
+    ["129048750359824"] = "normal",  -- Jun M1 3
+    ["129536653447724"] = "normal",  -- Jun M1 4
+    ["18542392001"] = "direct",      -- JUN Skill 1
+    ["18681089831"] = "block_02",    -- JUN Skill 2
+    ["18955032062"] = "block_04",    -- JUN Skill 3
+    ["103530817046655"] = "block_120", -- JUN Skill 4
+    ["76966635202046"] = "normal",   -- SHINJI M1 1
+    ["102448117900479"] = "normal",  -- SHINJI M1 2
+    ["111296208946579"] = "shinji_m1_3",  -- SHINJI M1 3 (custom)
+    ["100278816358393"] = "shinji_m1_4",  -- SHINJI M1 4 (custom)
+    ["125348562455925"] = "block_120", -- SHINJI Skill 1
+    ["126102858255615"] = "block_10",  -- SHINJI Skill 2
+    ["102273007149848"] = "direct",    -- SHINJI Skill 3
+    ["18193105588"] = "normal",      -- MARTIAL M1s
     ["15753464160"] = "normal",
     ["18193099953"] = "normal",
     ["15779089411"] = "normal",
-    ["15883604707"] = "block_normal",
-    ["15885657454"] = "direct",
-    ["16058228731"] = "direct",
-    ["15753705218"] = "block_10",      -- Martial H3
-    ["16916082286"] = "block_02",
+    ["15883604707"] = "block_normal",  -- MARTIAL H1
+    ["15885657454"] = "direct",        -- MARTIAL H1 var
+    ["16058228731"] = "direct",        -- MARTIAL H2
+    ["15753705218"] = "block_10",      -- MARTIAL H3
+    ["16916082286"] = "block_02",      -- Dash Frontal
 }
 
 local punishDelays = {
@@ -144,7 +146,9 @@ local punishDelays = {
     block_04 = 0.40,
     block_10 = 1.00,
     block_120 = 1.20,
-    martial_h3_special = 2.30,   -- Especial para Martial H3 - 2.3 segundos
+    martial_h3_special = 2.30,   -- Especial para Martial H3
+    shinji_m1_3 = 0.40,          -- Nuevo: 0.4s para Shinji M1 3
+    shinji_m1_4 = 0.50,          -- Nuevo: 0.5s para Shinji M1 4
 }
 
 local counterFrontAnims = {
@@ -264,7 +268,7 @@ local function executePunish()
     end
 end
 
--- Heartbeat principal
+-- Heartbeat principal (mejorado para counter: chequeo explícito de anims y prioridad)
 RunService.Heartbeat:Connect(function()
     if not (Toggles.EnableAutoBlock.Value or Toggles.EnableAutoPunish.Value or Toggles.EnableAutoCounter.Value) then
         return
@@ -286,8 +290,8 @@ RunService.Heartbeat:Connect(function()
         local animType, animId = getAnimTypeAndId(nearest)
 
         if animType then
-            -- Prioridad 1: Counter detrás (cualquier animación)
-            if Toggles.EnableAutoCounter.Value and isStrictlyBehindMe(nearest) then
+            -- Prioridad 1: Counter detrás (mejorado: chequeo si es M1 o cualquier anim seleccionada)
+            if Toggles.EnableAutoCounter.Value and isStrictlyBehindMe(nearest) and animTypes[animId] then  -- Solo para anims seleccionadas
                 if fDownSent then sendRequest("FUp"); fDownSent = false end
                 sendCounterRequest()
                 return
@@ -320,7 +324,7 @@ RunService.Heartbeat:Connect(function()
                         end)
                     end
                     return
-                elseif string.find(animType, "block_") then
+                elseif string.find(animType, "block_") or string.find(animType, "shinji_m1_") then  -- Incluye customs de Shinji
                     shouldBlock = Toggles.EnableAutoBlock.Value
                 elseif animType == "normal" then
                     shouldBlock = Toggles.EnableAutoBlock.Value and (isFacingMe(nearest) or isBehindMe(nearest))
@@ -477,6 +481,6 @@ ThemeManager:ApplyToTab(Tabs["UI Settings"])
 SaveManager:LoadAutoloadConfig()
 
 -- Inicialización
-Library:Notify("Script cargado correctamente ✓", "Audio Shinji solo cerca", 5)
-print("Auto Block + Punish + Counter - Actualizado 2025")
-print("Audio Shinji: detección limitada a distancia configurable")
+Library:Notify("Script cargado correctamente ✓", "Mejoras: Delays Shinji M1s ajustados, counter detrás mejorado", 5)
+print("Auto Block + Punish + Counter - Actualizado 2025.12.28")
+print("Mejoras: Shinji M1 3 (0.4s), M1 4 (0.5s); Counter detrás más sensible")
