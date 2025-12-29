@@ -1,3 +1,9 @@
+-- Auto Block + Auto Punish + Auto Counter - JUN ULT + SHINJI + MARTIAL ARTIST ULT
+-- Versión actualizada: Diciembre 2025
+-- Mejoras: Delays ajustados para M1s de Shinji (3ro: 0.4s, 4to: 0.5s)
+-- Auto counter mejorado: Detección detrás más sensible
+-- NUEVO: Jun Ulti Skill 2 & 3 → Bloqueo inmediato de solo 0.50s + Radio extendido de 50 studs
+
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
@@ -11,7 +17,7 @@ Library.ShowToggleFrameInKeybinds = true
 
 local Window = Library:CreateWindow({
     Title = "Auto Block + Punish + Counter",
-    Footer = "JUN ULT + SHINJI + MARTIAL ULT - Updated 2025.12.29 + Camlock",
+    Footer = "JUN ULT + SHINJI + MARTIAL ULT - Updated 2025.12.28",
     Icon = 95816097006870,
     NotifySide = "Right",
     ShowCustomCursor = true,
@@ -19,12 +25,12 @@ local Window = Library:CreateWindow({
 
 local Tabs = {
     Main = Window:AddTab("Main", "user"),
-    Camlock = Window:AddTab("Camlock", "crosshair"),
+    CamLock = Window:AddTab("Cam Lock", "crosshair"),
     Settings = Window:AddTab("Settings", "settings"),
     ["UI Settings"] = Window:AddTab("UI Settings", "settings"),
 }
 
--- Features (Auto Block/Punish/Counter)
+-- Features
 local MainGroup = Tabs.Main:AddLeftGroupbox("Features", "boxes")
 
 MainGroup:AddToggle("EnableAutoBlock", {
@@ -41,26 +47,6 @@ MainGroup:AddToggle("EnableAutoCounter", {
     Text = "Enable Auto Counter",
     Default = true,
 })
-
--- CAMLOCK SECTION
-local CamlockGroup = Tabs.Camlock:AddLeftGroupbox("Camlock Options", "crosshair")
-
-CamlockGroup:AddToggle("CamlockMobile", {
-    Text = "Camlock Mobile (Botón flotante)",
-    Default = false,
-})
-
-CamlockGroup:AddToggle("CamlockDPad", {
-    Text = "Camlock DPad Down (Consola/Mobile)",
-    Default = false,
-})
-
-CamlockGroup:AddLabel("FOV Radius: 150")
-CamlockGroup:AddLabel("Smoothness: 0.53")
-CamlockGroup:AddLabel("Prediction: 0.227 (suavizado 0.18)")
-CamlockGroup:AddLabel("Offset Y: 26px ↓")
-CamlockGroup:AddLabel("Aim Part: Head")
-CamlockGroup:AddLabel("Team Check: Enabled")
 
 -- Configurations
 local SettingsGroup = Tabs.Settings:AddLeftGroupbox("Configurations", "sliders")
@@ -125,30 +111,35 @@ SettingsGroup:AddSlider("AudioMaxDistance", {
 -- Services & Variables
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
-local camera = Workspace.CurrentCamera
 
--- Animation Types
+-- Anim Types ORDENADAS por personaje
 local animTypes = {
+    -- JUN M1s
     ["95971182752543"] = "normal",
     ["74711059252371"] = "normal",
     ["129048750359824"] = "normal",
     ["129536653447724"] = "normal",
+    -- JUN Skills
     ["18542392001"] = "direct",
     ["18681089831"] = "block_02",
     ["18955032062"] = "block_04",
     ["103530817046655"] = "block_120",
-    ["82028453200408"] = "block_ulti_jun_short",
-    ["100511842000786"] = "block_ulti_jun_short",
+    -- JUN ULTIMATE Skills (bloqueo corto + radio largo)
+    ["82028453200408"] = "block_ulti_jun_short",   -- Jun Ulti Skill 2
+    ["100511842000786"] = "block_ulti_jun_short",  -- Jun Ulti Skill 3
+
+    -- SHINJI M1s
     ["76966635202046"] = "normal",
     ["102448117900479"] = "normal",
     ["111296208946579"] = "shinji_m1_3",
     ["100278816358393"] = "shinji_m1_4",
+    -- SHINJI Skills
     ["125348562455925"] = "block_120",
     ["126102858255615"] = "block_10",
     ["102273007149848"] = "direct",
+
+    -- MARTIAL ARTIST
     ["18193105588"] = "normal",
     ["15753464160"] = "normal",
     ["18193099953"] = "normal",
@@ -158,7 +149,7 @@ local animTypes = {
     ["16058228731"] = "direct",
     ["15753705218"] = "block_10",
     ["16916082286"] = "block_02",
-    ["17230392848"] = "block_ulti",
+    ["17230392848"] = "block_ulti",    -- Martial Ultimate
 }
 
 local punishDelays = {
@@ -169,7 +160,7 @@ local punishDelays = {
     block_10 = 1.00,
     block_120 = 1.20,
     block_ulti = 2.50,
-    block_ulti_jun_short = 0.50,
+    block_ulti_jun_short = 0.50,       -- Bloqueo de solo 0.50s para ambas Jun Ulti 2 y 3
     martial_h3_special = 2.30,
     shinji_m1_3 = 0.40,
     shinji_m1_4 = 0.50,
@@ -181,319 +172,13 @@ local counterFrontAnims = {
     "15753705218"
 }
 
--- Auto Block States
+-- Estados
 local fDownSent = false
 local lastAttackTime = 0
 local isPunishing = false
 local isAudioBlocking = false
 
--- ==================== CAMLOCK ====================
-local FOV_RADIUS = 150
-local SMOOTHNESS = 0.53
-local PREDICTION_STRENGTH = 0.227
-local PREDICTION_SMOOTHNESS = 0.18
-local OFFSET_Y = 26
-local AIM_AT_HEAD = true
-local TEAM_CHECK = true
-local PREDICTION_ENABLED = true
-local DECAL_ID = 75662811756681
-
-local camlockActive = false
-local camlockConnection = nil
-local lockedTarget = nil  -- Player o Model (dummy)
-local lastTargetChar = nil
-local smoothedPredictedPos = nil
-local currentBillboard = nil
-
-local function getDummy()
-    local dummyModel = Workspace.Characters:FindFirstChild("Dummy")
-    if dummyModel and (dummyModel:FindFirstChild("Torso") or dummyModel:FindFirstChild("Head")) then
-        return dummyModel
-    end
-    return nil
-end
-
-local function getClosestTarget()
-    local closestTarget = nil
-    local closestDist = math.huge
-    local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-
-    -- Jugadores reales primero
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr == LocalPlayer then continue end
-        local char = plr.Character
-        if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
-
-        if TEAM_CHECK and LocalPlayer.Team and plr.Team and LocalPlayer.Team == plr.Team then continue end
-
-        local root = char.HumanoidRootPart
-        local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
-        if not onScreen then continue end
-
-        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-        if dist > FOV_RADIUS then continue end
-
-        if dist < closestDist then
-            closestDist = dist
-            closestTarget = {Type = "Player", Object = plr}
-        end
-    end
-
-    -- Si no hay jugadores, buscar dummy
-    if not closestTarget then
-        local dummy = getDummy()
-        if dummy then
-            local part = dummy:FindFirstChild("Torso") or dummy:FindFirstChild("HumanoidRootPart")
-            if part then
-                local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
-                if onScreen then
-                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-                    if dist <= FOV_RADIUS then
-                        closestTarget = {Type = "Dummy", Object = dummy}
-                    end
-                end
-            end
-        end
-    end
-
-    return closestTarget
-end
-
-local function getCharacterFromTarget(target)
-    if target.Type == "Player" then
-        return target.Object.Character
-    else
-        return target.Object
-    end
-end
-
-local function getAimPart(character)
-    return AIM_AT_HEAD and (character:FindFirstChild("Head") or character:FindFirstChild("Torso")) or 
-           character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
-end
-
-local function getAimPosition(part)
-    local currentPos = part.Position
-
-    if PREDICTION_ENABLED and part.Velocity.Magnitude > 5 then
-        local rawPredicted = currentPos + part.Velocity * PREDICTION_STRENGTH
-        if not smoothedPredictedPos then
-            smoothedPredictedPos = rawPredicted
-        else
-            smoothedPredictedPos = smoothedPredictedPos:Lerp(rawPredicted, PREDICTION_SMOOTHNESS)
-        end
-        currentPos = smoothedPredictedPos
-    else
-        smoothedPredictedPos = nil
-    end
-
-    if OFFSET_Y ~= 0 then
-        local screenPos, onScreen = camera:WorldToViewportPoint(currentPos)
-        if onScreen then
-            local adjustedY = screenPos.Y + OFFSET_Y
-            local ray = camera:ViewportPointToRay(screenPos.X, adjustedY)
-            currentPos = camera.CFrame.Position + ray.Direction * (currentPos - camera.CFrame.Position).Magnitude
-        end
-    end
-
-    return currentPos
-end
-
-local function createMarker(character)
-    if currentBillboard then currentBillboard:Destroy() end
-
-    local head = character:FindFirstChild("Head") or character:FindFirstChild("Torso")
-    if not head then return end
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "LockMarker"
-    billboard.Adornee = head
-    billboard.AlwaysOnTop = true
-    billboard.LightInfluence = 0
-    billboard.Size = UDim2.new(0, 100, 0, 100)
-    billboard.StudsOffset = Vector3.new(0, 3, 0)
-    billboard.Parent = head
-
-    local image = Instance.new("ImageLabel")
-    image.BackgroundTransparency = 1
-    image.Size = UDim2.new(1, 0, 1, 0)
-    image.Image = "rbxassetid://" .. DECAL_ID
-    image.Parent = billboard
-
-    currentBillboard = billboard
-end
-
-local function removeMarker()
-    if currentBillboard then
-        currentBillboard:Destroy()
-        currentBillboard = nil
-    end
-end
-
-local function startCamlock()
-    camlockConnection = RunService.RenderStepped:Connect(function()
-        if not lockedTarget then
-            stopCamlock()
-            return
-        end
-
-        local char = getCharacterFromTarget(lockedTarget)
-        if not char or not char.Parent then
-            removeMarker()
-            return
-        end
-
-        if char ~= lastTargetChar then
-            smoothedPredictedPos = nil
-            lastTargetChar = char
-            createMarker(char)
-        end
-
-        local targetPart = getAimPart(char)
-        if not targetPart then
-            removeMarker()
-            return
-        end
-
-        local aimPos = getAimPosition(targetPart)
-        local targetCFrame = CFrame.new(camera.CFrame.Position, aimPos)
-        camera.CFrame = camera.CFrame:Lerp(targetCFrame, SMOOTHNESS)
-    end)
-end
-
-local function stopCamlock()
-    if camlockConnection then
-        camlockConnection:Disconnect()
-        camlockConnection = nil
-    end
-    lockedTarget = nil
-    lastTargetChar = nil
-    smoothedPredictedPos = nil
-    removeMarker()
-end
-
-local function toggleCamlock()
-    if camlockActive then
-        camlockActive = false
-        stopCamlock()
-    else
-        local target = getClosestTarget()
-        if not target then
-            return
-        end
-        lockedTarget = target
-        lastTargetChar = getCharacterFromTarget(target)
-        if lastTargetChar then createMarker(lastTargetChar) end
-        camlockActive = true
-        startCamlock()
-    end
-end
-
--- ==================== CAMLOCK MOBILE ====================
-local mobileScreenGui = nil
-local mobileToggleBtn = nil
-
-local function createMobileButton()
-    if mobileScreenGui then mobileScreenGui:Destroy() end
-
-    mobileScreenGui = Instance.new("ScreenGui")
-    mobileScreenGui.Name = "CamlockMobileGui"
-    mobileScreenGui.ResetOnSpawn = false
-    mobileScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-
-    mobileToggleBtn = Instance.new("TextButton")
-    mobileToggleBtn.Size = UDim2.new(0, 140, 0, 45)
-    mobileToggleBtn.Position = UDim2.new(0.5, -70, 0.5, -22)
-    mobileToggleBtn.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
-    mobileToggleBtn.Text = "CAMLOCK OFF"
-    mobileToggleBtn.TextColor3 = Color3.fromRGB(255, 77, 77)
-    mobileToggleBtn.Font = Enum.Font.GothamBlack
-    mobileToggleBtn.TextSize = 18
-    mobileToggleBtn.Parent = mobileScreenGui
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 12)
-    corner.Parent = mobileToggleBtn
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Thickness = 2
-    stroke.Color = Color3.fromRGB(255, 255, 255)
-    stroke.Transparency = 0.7
-    stroke.Parent = mobileToggleBtn
-
-    -- Draggable
-    local dragging = false
-    local dragStart, startPos
-
-    mobileToggleBtn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = mobileToggleBtn.Position
-        end
-    end)
-
-    mobileToggleBtn.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            mobileToggleBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-
-    mobileToggleBtn.MouseButton1Click:Connect(toggleCamlock)
-
-    task.spawn(function()
-        while mobileScreenGui and mobileScreenGui.Parent do
-            if camlockActive then
-                mobileToggleBtn.Text = "CAMLOCK ON"
-                mobileToggleBtn.TextColor3 = Color3.fromRGB(0, 255, 133)
-                mobileToggleBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-            else
-                mobileToggleBtn.Text = "CAMLOCK OFF"
-                mobileToggleBtn.TextColor3 = Color3.fromRGB(255, 77, 77)
-                mobileToggleBtn.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
-            end
-            task.wait(0.1)
-        end
-    end)
-end
-
--- Toggles Callbacks
-Toggles.CamlockMobile.Callback = function(value)
-    if value then
-        createMobileButton()
-    else
-        if mobileScreenGui then
-            mobileScreenGui:Destroy()
-            mobileScreenGui = nil
-            mobileToggleBtn = nil
-        end
-        if camlockActive then
-            toggleCamlock()
-        end
-    end
-end
-
-Toggles.CamlockDPad.Callback = function(value)
-    if value and camlockActive then
-        toggleCamlock()
-    end
-end
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if Toggles.CamlockDPad.Value and input.KeyCode == Enum.KeyCode.DPadDown then
-        toggleCamlock()
-    end
-end)
-
--- ==================== AUTO BLOCK / PUNISH / COUNTER ====================
+-- Funciones auxiliares
 local function getNearestPlayer(maxDist)
     local nearest, shortest = nil, maxDist
     local myChar = LocalPlayer.Character
@@ -597,6 +282,7 @@ local function executePunish()
     end
 end
 
+-- Heartbeat principal
 RunService.Heartbeat:Connect(function()
     if not (Toggles.EnableAutoBlock.Value or Toggles.EnableAutoPunish.Value or Toggles.EnableAutoCounter.Value) then
         return
@@ -613,8 +299,8 @@ RunService.Heartbeat:Connect(function()
 
     local currentTime = tick()
 
-    -- Jun Ulti especial
-    local nearestJunUlti, distJunUlti = getNearestPlayer(50)
+    -- Detección especial para Jun Ulti Skill 2 y 3: radio de 50 studs
+    local nearestJunUlti, distJunUlti = getNearestPlayer(50)  -- Radio extendido solo para estas habilidades
     if nearestJunUlti and nearestJunUlti.Character and nearestJunUlti.Character:FindFirstChild("HumanoidRootPart") then
         local animType, animId = getAnimTypeAndId(nearestJunUlti)
         if animType == "block_ulti_jun_short" then
@@ -625,7 +311,7 @@ RunService.Heartbeat:Connect(function()
                 if Toggles.EnableAutoPunish.Value and currentTime - lastAttackTime >= Options.AttackCooldown.Value then
                     isPunishing = true
                     task.spawn(function()
-                        task.wait(punishDelays.block_ulti_jun_short)
+                        task.wait(punishDelays.block_ulti_jun_short)  -- 0.50s
                         if fDownSent then 
                             sendRequest("FUp")
                             fDownSent = false 
@@ -635,6 +321,7 @@ RunService.Heartbeat:Connect(function()
                         isPunishing = false
                     end)
                 else
+                    -- Si solo bloqueo, lo quita después de 0.50s
                     task.spawn(function()
                         task.wait(punishDelays.block_ulti_jun_short)
                         if fDownSent then
@@ -648,17 +335,20 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
+    -- Detección normal (radio configurado por slider)
     local nearest = getNearestPlayer(Options.MaxDistance.Value)
     if nearest and nearest.Character and nearest.Character:FindFirstChild("HumanoidRootPart") then
         local animType, animId = getAnimTypeAndId(nearest)
 
         if animType then
+            -- Prioridad 1: Counter detrás
             if Toggles.EnableAutoCounter.Value and isStrictlyBehindMe(nearest) and animTypes[animId] then
                 if fDownSent then sendRequest("FUp"); fDownSent = false end
                 sendCounterRequest()
                 return
             end
 
+            -- Prioridad 2: Counter frontal
             if Toggles.EnableAutoCounter.Value and table.find(counterFrontAnims, animId) and isFacingMe(nearest) then
                 if fDownSent then sendRequest("FUp"); fDownSent = false end
                 sendCounterRequest()
@@ -719,7 +409,7 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Shinji Audio Detection
+-- Audio detection (Shinji) - Sin cambios
 local targetAudioId = "rbxassetid://107838666135851"
 
 local function tryGetPlayerFromSound(sound)
@@ -787,7 +477,451 @@ end
 
 setupAudioDetection()
 
--- UI Settings
+-- Cam Lock Console
+local CamLockConsoleGroup = Tabs.CamLock:AddLeftGroupbox("Cam Lock Console", "crosshair")
+
+CamLockConsoleGroup:AddToggle("EnableCamLockConsole", {
+    Text = "Enable Cam Lock Console",
+    Default = false,
+})
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+
+-- Configuración
+local FOV_RADIUS = 150
+local SMOOTHNESS = 0.53                  -- Suavidad del aimlock
+local PREDICTION_STRENGTH = 0.227         -- Fuerza de predicción
+local PREDICTION_SMOOTHNESS = 0.18       -- Suavidad de la predicción
+local OFFSET_Y = 26                      -- Offset hacia abajo (píxeles en pantalla)
+local AIM_AT_HEAD = true                 -- true = cabeza, false = torso
+local TEAM_CHECK = true                  -- Evita lockear compañeros de equipo
+local PREDICTION_ENABLED = false
+
+local DECAL_ID = 75662811756681          -- ID de tu decal para el marker
+
+-- Variables del script
+local aimActive = false
+local connection = nil
+local lockedTargetPlayer = nil
+local lastTargetChar = nil
+local smoothedPredictedPos = nil
+local currentBillboard = nil      -- Marker sobre la cabeza del objetivo
+
+-- Busca el jugador más cercano dentro del FOV
+local function getClosestPlayer()
+    local closestPlayer = nil
+    local closestDist = math.huge
+    local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr == player then continue end
+        local char = plr.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
+
+        if TEAM_CHECK and player.Team and plr.Team and player.Team == plr.Team then continue end
+
+        local root = char.HumanoidRootPart
+        local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
+        if not onScreen then continue end
+
+        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+        if dist > FOV_RADIUS then continue end
+
+        if dist < closestDist then
+            closestDist = dist
+            closestPlayer = plr
+        end
+    end
+    return closestPlayer
+end
+
+-- Calcula la posición objetivo con predicción y offset
+local function getAimPosition(part)
+    local currentPos = part.Position
+
+    if PREDICTION_ENABLED and part.Velocity.Magnitude > 5 then
+        local rawPredicted = currentPos + part.Velocity * PREDICTION_STRENGTH
+        if not smoothedPredictedPos then
+            smoothedPredictedPos = rawPredicted
+        else
+            smoothedPredictedPos = smoothedPredictedPos:Lerp(rawPredicted, PREDICTION_SMOOTHNESS)
+        end
+        currentPos = smoothedPredictedPos
+    else
+        smoothedPredictedPos = nil
+    end
+
+    -- Offset vertical
+    if OFFSET_Y ~= 0 then
+        local screenPos, onScreen = camera:WorldToViewportPoint(currentPos)
+        if onScreen then
+            local adjustedY = screenPos.Y + OFFSET_Y
+            local ray = camera:ViewportPointToRay(screenPos.X, adjustedY)
+            currentPos = camera.CFrame.Position + ray.Direction * (currentPos - camera.CFrame.Position).Magnitude
+        end
+    end
+
+    return currentPos
+end
+
+-- Crea el marker (decal) sobre la cabeza del enemigo lockeado
+local function createMarker(character)
+    if currentBillboard then currentBillboard:Destroy() end
+
+    local head = character:WaitForChild("Head")
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "LockMarker"
+    billboard.Adornee = head
+    billboard.AlwaysOnTop = true
+    billboard.LightInfluence = 0
+    billboard.Size = UDim2.new(0, 100, 0, 100)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.Parent = head
+
+    local image = Instance.new("ImageLabel")
+    image.BackgroundTransparency = 1
+    image.Size = UDim2.new(1, 0, 1, 0)
+    image.Image = "rbxassetid://" .. DECAL_ID
+    image.Parent = billboard
+
+    currentBillboard = billboard
+end
+
+local function removeMarker()
+    if currentBillboard then
+        currentBillboard:Destroy()
+        currentBillboard = nil
+    end
+end
+
+-- Inicia el aimlock
+local function startAim()
+    connection = RunService.RenderStepped:Connect(function()
+        if not lockedTargetPlayer or not lockedTargetPlayer.Parent then
+            stopAim()
+            return
+        end
+
+        local char = lockedTargetPlayer.Character
+        if not char or not char.Parent then
+            removeMarker()
+            return
+        end
+
+        if char ~= lastTargetChar then
+            smoothedPredictedPos = nil
+            lastTargetChar = char
+            createMarker(char)
+        end
+
+        local targetPart = AIM_AT_HEAD and char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+        if not targetPart then
+            removeMarker()
+            return
+        end
+
+        local aimPos = getAimPosition(targetPart)
+        local targetCFrame = CFrame.new(camera.CFrame.Position, aimPos)
+        camera.CFrame = camera.CFrame:Lerp(targetCFrame, SMOOTHNESS)
+    end)
+end
+
+-- Detiene el aimlock
+local function stopAim()
+    if connection then
+        connection:Disconnect()
+        connection = nil
+    end
+    lockedTargetPlayer = nil
+    lastTargetChar = nil
+    smoothedPredictedPos = nil
+    removeMarker()
+end
+
+-- Toggle principal (activar/desactivar)
+local function toggleAimlock()
+    if aimActive then
+        aimActive = false
+        stopAim()
+    else
+        local targetPlayer = getClosestPlayer()
+        if not targetPlayer then return end
+
+        lockedTargetPlayer = targetPlayer
+        lastTargetChar = targetPlayer.Character
+        if lastTargetChar then
+            createMarker(lastTargetChar)
+        end
+        aimActive = true
+        startAim()
+    end
+end
+
+-- Control exclusivo con DPad Down (flecha abajo en consolas)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.DPadDown and Toggles.EnableCamLockConsole.Value then
+        toggleAimlock()
+    end
+end)
+
+-- Cam Lock Mobile
+local CamLockMobileGroup = Tabs.CamLock:AddRightGroupbox("Cam Lock Mobile", "crosshair")
+
+CamLockMobileGroup:AddToggle("EnableCamLockMobile", {
+    Text = "Enable Cam Lock Mobile",
+    Default = false,
+})
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+
+-- Configuración fija
+local FOV_RADIUS = 150
+local SMOOTHNESS = 0.53                  -- Suavidad general del aimlock (cámara)
+local PREDICTION_STRENGTH = 0.227        -- Fuerza máxima de la predicción
+local PREDICTION_SMOOTHNESS = 0.18       -- Suavidad de aplicación de la predicción
+local OFFSET_Y = 26                      -- Offset en píxeles hacia abajo
+local AIM_AT_HEAD = true
+local TEAM_CHECK = true                  -- Solo para selección inicial
+local PREDICTION_ENABLED = true
+
+local DECAL_ID = 75662811756681          -- Tu decal ID aquí
+
+local aimActive = false
+local connection
+local lockedTargetPlayer = nil           
+local lastTargetChar = nil               
+local smoothedPredictedPos = nil
+local currentBillboard = nil             -- NUEVO: Referencia al BillboardGui del marker
+
+-- Botón flotante Toggle Lock (igual)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MinimalAimLock"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 140, 0, 45)
+toggleBtn.Position = UDim2.new(0.5, -70, 0.5, -22)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+toggleBtn.Text = "OFF"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 77, 77)
+toggleBtn.Font = Enum.Font.GothamBlack
+toggleBtn.TextSize = 18
+toggleBtn.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = toggleBtn
+
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 2
+stroke.Color = Color3.fromRGB(255, 255, 255)
+stroke.Transparency = 0.7
+stroke.Parent = toggleBtn
+
+-- Draggable (igual)
+local dragging = false
+local dragStart, startPos
+
+toggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = toggleBtn.Position
+    end
+end)
+
+toggleBtn.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        toggleBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- NUEVA: Selecciona el jugador más cercano SOLO UNA VEZ
+local function getClosestPlayer()
+    local closestPlayer = nil
+    local closestDist = math.huge
+    local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr == player then continue end
+        local char = plr.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
+
+        if TEAM_CHECK and player.Team and plr.Team and player.Team == plr.Team then continue end
+
+        local root = char.HumanoidRootPart
+        local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
+        if not onScreen then continue end
+
+        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+        if dist > FOV_RADIUS then continue end
+
+        if dist < closestDist then
+            closestDist = dist
+            closestPlayer = plr
+        end
+    end
+    return closestPlayer
+end
+
+local function getAimPosition(part)
+    local currentPos = part.Position
+
+    if PREDICTION_ENABLED and part.Velocity.Magnitude > 5 then
+        local rawPredicted = currentPos + part.Velocity * PREDICTION_STRENGTH
+
+        if not smoothedPredictedPos then
+            smoothedPredictedPos = rawPredicted
+        else
+            smoothedPredictedPos = smoothedPredictedPos:Lerp(rawPredicted, PREDICTION_SMOOTHNESS)
+        end
+
+        currentPos = smoothedPredictedPos
+    else
+        if smoothedPredictedPos then
+            smoothedPredictedPos = nil
+        end
+    end
+
+    if OFFSET_Y ~= 0 then
+        local screenPos, onScreen = camera:WorldToViewportPoint(currentPos)
+        if onScreen then
+            local adjustedY = screenPos.Y + OFFSET_Y
+            local ray = camera:ViewportPointToRay(screenPos.X, adjustedY)
+            currentPos = camera.CFrame.Position + ray.Direction * (currentPos - camera.CFrame.Position).Magnitude
+        end
+    end
+
+    return currentPos
+end
+
+-- NUEVA: Crear el marker (BillboardGui con tu decal)
+local function createMarker(character)
+    if currentBillboard then currentBillboard:Destroy() end
+
+    local head = character:WaitForChild("Head")
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "LockMarker"
+    billboard.Adornee = head
+    billboard.AlwaysOnTop = true
+    billboard.LightInfluence = 0
+    billboard.Size = UDim2.new(0, 100, 0, 100)  -- Tamaño del marker (ajusta si quieres)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)  -- Altura sobre la cabeza
+    billboard.Parent = head
+
+    local image = Instance.new("ImageLabel")
+    image.BackgroundTransparency = 1
+    image.Size = UDim2.new(1, 0, 1, 0)
+    image.Image = "rbxassetid://" .. DECAL_ID
+    image.Parent = billboard
+
+    currentBillboard = billboard
+end
+
+-- NUEVA: Eliminar el marker
+local function removeMarker()
+    if currentBillboard then
+        currentBillboard:Destroy()
+        currentBillboard = nil
+    end
+end
+
+local function startAim()
+    connection = RunService.RenderStepped:Connect(function()
+        if not lockedTargetPlayer or not lockedTargetPlayer.Parent then
+            toggleBtn.Text = "OFF"
+            toggleBtn.TextColor3 = Color3.fromRGB(255, 77, 77)
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+            stopAim()
+            return
+        end
+
+        local char = lockedTargetPlayer.Character
+        if not char or not char.Parent then 
+            removeMarker()
+            return 
+        end
+
+        if char ~= lastTargetChar then
+            smoothedPredictedPos = nil
+            lastTargetChar = char
+            createMarker(char)  -- Recrear marker tras respawn
+        end
+
+        local targetPart = AIM_AT_HEAD and char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+        if not targetPart then 
+            removeMarker()
+            return 
+        end
+
+        local aimPos = getAimPosition(targetPart)
+        local targetCFrame = CFrame.new(camera.CFrame.Position, aimPos)
+        camera.CFrame = camera.CFrame:Lerp(targetCFrame, SMOOTHNESS)
+    end)
+end
+
+local function stopAim()
+    if connection then
+        connection:Disconnect()
+        connection = nil
+    end
+    lockedTargetPlayer = nil
+    lastTargetChar = nil
+    smoothedPredictedPos = nil
+    removeMarker()
+end
+
+-- Toggle
+toggleBtn.MouseButton1Click:Connect(function()
+    if Toggles.EnableCamLockMobile.Value then
+        if aimActive then
+            aimActive = false
+            toggleBtn.Text = "OFF"
+            toggleBtn.TextColor3 = Color3.fromRGB(255, 77, 77)
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+            stopAim()
+        else
+            local targetPlayer = getClosestPlayer()
+            if not targetPlayer then
+                return
+            end
+            lockedTargetPlayer = targetPlayer
+            lastTargetChar = targetPlayer.Character
+            if lastTargetChar then
+                createMarker(lastTargetChar)  -- Crear marker inmediatamente
+            end
+            aimActive = true
+            toggleBtn.Text = "ON"
+            toggleBtn.TextColor3 = Color3.fromRGB(0, 255, 133)
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+            startAim()
+        end
+    end
+end)
+
+-- UI Settings (sin cambios)
 local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
 
 MenuGroup:AddToggle("ShowCustomCursor", {
@@ -824,5 +958,3 @@ SaveManager:SetFolder("AutoBlockHub/game")
 SaveManager:BuildConfigSection(Tabs["UI Settings"])
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
 SaveManager:LoadAutoloadConfig()
-
-print("Auto Block + Punish + Counter + Camlock - Actualizado 2025.12.29")
