@@ -1,7 +1,113 @@
--- Inicialización
-Library:Notify("Script completo cargado ✓\nCamlock suave optimizado para móvil/consola\nRecomendado: Smoothness 0.065 | Pred 135ms", 7)
-print("Auto Block + Punish + Counter + Smooth Camlock - Dic 2025")
-print("Camlock: Movimiento ultra-suave, sin bruscos en consola/teléfono"    Default = 0.32,
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+Library.ForceCheckbox = false
+Library.ShowToggleFrameInKeybinds = true
+
+local Window = Library:CreateWindow({
+    Title = "Auto Block + Punish + Counter",
+    Footer = "JUN ULT + SHINJI + MARTIAL ULT - Updated 2025.12.29 + Camlock",
+    Icon = 95816097006870,
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+})
+
+local Tabs = {
+    Main = Window:AddTab("Main", "user"),
+    Camlock = Window:AddTab("Camlock", "crosshair"),
+    Settings = Window:AddTab("Settings", "settings"),
+    ["UI Settings"] = Window:AddTab("UI Settings", "settings"),
+}
+
+-- Features (Auto Block/Punish/Counter)
+local MainGroup = Tabs.Main:AddLeftGroupbox("Features", "boxes")
+
+MainGroup:AddToggle("EnableAutoBlock", {
+    Text = "Enable Auto Block",
+    Default = true,
+})
+
+MainGroup:AddToggle("EnableAutoPunish", {
+    Text = "Enable Auto Punish",
+    Default = true,
+})
+
+MainGroup:AddToggle("EnableAutoCounter", {
+    Text = "Enable Auto Counter",
+    Default = true,
+})
+
+-- CAMLOCK SECTION
+local CamlockGroup = Tabs.Camlock:AddLeftGroupbox("Camlock Options", "crosshair")
+
+CamlockGroup:AddToggle("CamlockMobile", {
+    Text = "Camlock Mobile (Botón flotante)",
+    Default = false,
+})
+
+CamlockGroup:AddToggle("CamlockDPad", {
+    Text = "Camlock DPad Down (Consola/Mobile)",
+    Default = false,
+})
+
+CamlockGroup:AddLabel("FOV Radius: 150")
+CamlockGroup:AddLabel("Smoothness: 0.53")
+CamlockGroup:AddLabel("Prediction: 0.227 (suavizado 0.18)")
+CamlockGroup:AddLabel("Offset Y: 26px ↓")
+CamlockGroup:AddLabel("Aim Part: Head")
+CamlockGroup:AddLabel("Team Check: Enabled")
+
+-- Configurations
+local SettingsGroup = Tabs.Settings:AddLeftGroupbox("Configurations", "sliders")
+
+SettingsGroup:AddSlider("MaxDistance", {
+    Text = "Max Detection Distance",
+    Default = 25,
+    Min = 10,
+    Max = 50,
+    Rounding = 0,
+})
+
+SettingsGroup:AddSlider("BehindDistance", {
+    Text = "Behind Distance",
+    Default = 18,
+    Min = 5,
+    Max = 30,
+    Rounding = 0,
+})
+
+SettingsGroup:AddSlider("CounterDistance", {
+    Text = "Counter Distance",
+    Default = 12,
+    Min = 5,
+    Max = 20,
+    Rounding = 0,
+})
+
+SettingsGroup:AddSlider("AngleThreshold", {
+    Text = "Angle Threshold",
+    Default = 120,
+    Min = 90,
+    Max = 180,
+    Rounding = 0,
+})
+
+SettingsGroup:AddSlider("StrictBehindAngle", {
+    Text = "Strict Behind Angle",
+    Default = 140,
+    Min = 120,
+    Max = 180,
+    Rounding = 0,
+})
+
+SettingsGroup:AddSlider("AttackCooldown", {
+    Text = "Attack Cooldown",
+    Default = 0.32,
     Min = 0.1,
     Max = 1.0,
     Rounding = 2,
