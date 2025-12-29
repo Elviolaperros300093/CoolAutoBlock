@@ -1,9 +1,3 @@
--- Auto Block + Auto Punish + Auto Counter - JUN + SHINJI + MARTIAL ARTIST
--- Versión actualizada: Diciembre 2025
--- Mejoras: Delays ajustados para M1s de Shinji (3ro: 0.4s, 4to: 0.5s)
--- Auto counter mejorado: Detección detrás más sensible (ángulo estrict behind bajado a 140 por default, distancias ajustadas)
--- Detección M1 detrás: Prioridad alta y chequeo explícito para todas anims seleccionadas
-
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
@@ -17,7 +11,7 @@ Library.ShowToggleFrameInKeybinds = true
 
 local Window = Library:CreateWindow({
     Title = "Auto Block + Punish + Counter",
-    Footer = "JUN + SHINJI + MARTIAL ARTIST - Updated 2025.12.28",
+    Footer = "JUN ULT + SHINJI + MARTIAL ULT - Updated 2025.12.29 + Camlock",
     Icon = 95816097006870,
     NotifySide = "Right",
     ShowCustomCursor = true,
@@ -25,11 +19,12 @@ local Window = Library:CreateWindow({
 
 local Tabs = {
     Main = Window:AddTab("Main", "user"),
+    Camlock = Window:AddTab("Camlock", "crosshair"),
     Settings = Window:AddTab("Settings", "settings"),
     ["UI Settings"] = Window:AddTab("UI Settings", "settings"),
 }
 
--- Features
+-- Features (Auto Block/Punish/Counter)
 local MainGroup = Tabs.Main:AddLeftGroupbox("Features", "boxes")
 
 MainGroup:AddToggle("EnableAutoBlock", {
@@ -46,6 +41,26 @@ MainGroup:AddToggle("EnableAutoCounter", {
     Text = "Enable Auto Counter",
     Default = true,
 })
+
+-- CAMLOCK SECTION
+local CamlockGroup = Tabs.Camlock:AddLeftGroupbox("Camlock Options", "crosshair")
+
+CamlockGroup:AddToggle("CamlockMobile", {
+    Text = "Camlock Mobile (Botón flotante)",
+    Default = false,
+})
+
+CamlockGroup:AddToggle("CamlockDPad", {
+    Text = "Camlock DPad Down (Consola/Mobile)",
+    Default = false,
+})
+
+CamlockGroup:AddLabel("FOV Radius: 150")
+CamlockGroup:AddLabel("Smoothness: 0.53")
+CamlockGroup:AddLabel("Prediction: 0.227 (suavizado 0.18)")
+CamlockGroup:AddLabel("Offset Y: 26px ↓")
+CamlockGroup:AddLabel("Aim Part: Head")
+CamlockGroup:AddLabel("Team Check: Enabled")
 
 -- Configurations
 local SettingsGroup = Tabs.Settings:AddLeftGroupbox("Configurations", "sliders")
@@ -84,7 +99,7 @@ SettingsGroup:AddSlider("AngleThreshold", {
 
 SettingsGroup:AddSlider("StrictBehindAngle", {
     Text = "Strict Behind Angle",
-    Default = 140,  -- Bajado de 150 a 140 para detección más sensible detrás
+    Default = 140,
     Min = 120,
     Max = 180,
     Rounding = 0,
@@ -110,33 +125,40 @@ SettingsGroup:AddSlider("AudioMaxDistance", {
 -- Services & Variables
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
 
+-- Animation Types
 local animTypes = {
-    ["95971182752543"] = "normal",   -- Jun M1 1
-    ["74711059252371"] = "normal",   -- Jun M1 2
-    ["129048750359824"] = "normal",  -- Jun M1 3
-    ["129536653447724"] = "normal",  -- Jun M1 4
-    ["18542392001"] = "direct",      -- JUN Skill 1
-    ["18681089831"] = "block_02",    -- JUN Skill 2
-    ["18955032062"] = "block_04",    -- JUN Skill 3
-    ["103530817046655"] = "block_120", -- JUN Skill 4
-    ["76966635202046"] = "normal",   -- SHINJI M1 1
-    ["102448117900479"] = "normal",  -- SHINJI M1 2
-    ["111296208946579"] = "shinji_m1_3",  -- SHINJI M1 3 (custom)
-    ["100278816358393"] = "shinji_m1_4",  -- SHINJI M1 4 (custom)
-    ["125348562455925"] = "block_120", -- SHINJI Skill 1
-    ["126102858255615"] = "block_10",  -- SHINJI Skill 2
-    ["102273007149848"] = "direct",    -- SHINJI Skill 3
-    ["18193105588"] = "normal",      -- MARTIAL M1s
+    ["95971182752543"] = "normal",
+    ["74711059252371"] = "normal",
+    ["129048750359824"] = "normal",
+    ["129536653447724"] = "normal",
+    ["18542392001"] = "direct",
+    ["18681089831"] = "block_02",
+    ["18955032062"] = "block_04",
+    ["103530817046655"] = "block_120",
+    ["82028453200408"] = "block_ulti_jun_short",
+    ["100511842000786"] = "block_ulti_jun_short",
+    ["76966635202046"] = "normal",
+    ["102448117900479"] = "normal",
+    ["111296208946579"] = "shinji_m1_3",
+    ["100278816358393"] = "shinji_m1_4",
+    ["125348562455925"] = "block_120",
+    ["126102858255615"] = "block_10",
+    ["102273007149848"] = "direct",
+    ["18193105588"] = "normal",
     ["15753464160"] = "normal",
     ["18193099953"] = "normal",
     ["15779089411"] = "normal",
-    ["15883604707"] = "block_normal",  -- MARTIAL H1
-    ["15885657454"] = "direct",        -- MARTIAL H1 var
-    ["16058228731"] = "direct",        -- MARTIAL H2
-    ["15753705218"] = "block_10",      -- MARTIAL H3
-    ["16916082286"] = "block_02",      -- Dash Frontal
+    ["15883604707"] = "block_normal",
+    ["15885657454"] = "direct",
+    ["16058228731"] = "direct",
+    ["15753705218"] = "block_10",
+    ["16916082286"] = "block_02",
+    ["17230392848"] = "block_ulti",
 }
 
 local punishDelays = {
@@ -146,24 +168,332 @@ local punishDelays = {
     block_04 = 0.40,
     block_10 = 1.00,
     block_120 = 1.20,
-    martial_h3_special = 2.30,   -- Especial para Martial H3
-    shinji_m1_3 = 0.40,          -- Nuevo: 0.4s para Shinji M1 3
-    shinji_m1_4 = 0.50,          -- Nuevo: 0.5s para Shinji M1 4
+    block_ulti = 2.50,
+    block_ulti_jun_short = 0.50,
+    martial_h3_special = 2.30,
+    shinji_m1_3 = 0.40,
+    shinji_m1_4 = 0.50,
 }
 
 local counterFrontAnims = {
-    "18955032062",       -- JUN Skill 3
-    "102273007149848",   -- SHINJI Skill 3
-    "15753705218"        -- MARTIAL H3
+    "18955032062",
+    "102273007149848",
+    "15753705218"
 }
 
--- Estados
+-- Auto Block States
 local fDownSent = false
 local lastAttackTime = 0
 local isPunishing = false
 local isAudioBlocking = false
 
--- Funciones auxiliares
+-- ==================== CAMLOCK ====================
+local FOV_RADIUS = 150
+local SMOOTHNESS = 0.53
+local PREDICTION_STRENGTH = 0.227
+local PREDICTION_SMOOTHNESS = 0.18
+local OFFSET_Y = 26
+local AIM_AT_HEAD = true
+local TEAM_CHECK = true
+local PREDICTION_ENABLED = true
+local DECAL_ID = 75662811756681
+
+local camlockActive = false
+local camlockConnection = nil
+local lockedTarget = nil  -- Player o Model (dummy)
+local lastTargetChar = nil
+local smoothedPredictedPos = nil
+local currentBillboard = nil
+
+local function getDummy()
+    local dummyModel = Workspace.Characters:FindFirstChild("Dummy")
+    if dummyModel and (dummyModel:FindFirstChild("Torso") or dummyModel:FindFirstChild("Head")) then
+        return dummyModel
+    end
+    return nil
+end
+
+local function getClosestTarget()
+    local closestTarget = nil
+    local closestDist = math.huge
+    local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+
+    -- Jugadores reales primero
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr == LocalPlayer then continue end
+        local char = plr.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
+
+        if TEAM_CHECK and LocalPlayer.Team and plr.Team and LocalPlayer.Team == plr.Team then continue end
+
+        local root = char.HumanoidRootPart
+        local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
+        if not onScreen then continue end
+
+        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+        if dist > FOV_RADIUS then continue end
+
+        if dist < closestDist then
+            closestDist = dist
+            closestTarget = {Type = "Player", Object = plr}
+        end
+    end
+
+    -- Si no hay jugadores, buscar dummy
+    if not closestTarget then
+        local dummy = getDummy()
+        if dummy then
+            local part = dummy:FindFirstChild("Torso") or dummy:FindFirstChild("HumanoidRootPart")
+            if part then
+                local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                    if dist <= FOV_RADIUS then
+                        closestTarget = {Type = "Dummy", Object = dummy}
+                    end
+                end
+            end
+        end
+    end
+
+    return closestTarget
+end
+
+local function getCharacterFromTarget(target)
+    if target.Type == "Player" then
+        return target.Object.Character
+    else
+        return target.Object
+    end
+end
+
+local function getAimPart(character)
+    return AIM_AT_HEAD and (character:FindFirstChild("Head") or character:FindFirstChild("Torso")) or 
+           character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+end
+
+local function getAimPosition(part)
+    local currentPos = part.Position
+
+    if PREDICTION_ENABLED and part.Velocity.Magnitude > 5 then
+        local rawPredicted = currentPos + part.Velocity * PREDICTION_STRENGTH
+        if not smoothedPredictedPos then
+            smoothedPredictedPos = rawPredicted
+        else
+            smoothedPredictedPos = smoothedPredictedPos:Lerp(rawPredicted, PREDICTION_SMOOTHNESS)
+        end
+        currentPos = smoothedPredictedPos
+    else
+        smoothedPredictedPos = nil
+    end
+
+    if OFFSET_Y ~= 0 then
+        local screenPos, onScreen = camera:WorldToViewportPoint(currentPos)
+        if onScreen then
+            local adjustedY = screenPos.Y + OFFSET_Y
+            local ray = camera:ViewportPointToRay(screenPos.X, adjustedY)
+            currentPos = camera.CFrame.Position + ray.Direction * (currentPos - camera.CFrame.Position).Magnitude
+        end
+    end
+
+    return currentPos
+end
+
+local function createMarker(character)
+    if currentBillboard then currentBillboard:Destroy() end
+
+    local head = character:FindFirstChild("Head") or character:FindFirstChild("Torso")
+    if not head then return end
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "LockMarker"
+    billboard.Adornee = head
+    billboard.AlwaysOnTop = true
+    billboard.LightInfluence = 0
+    billboard.Size = UDim2.new(0, 100, 0, 100)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.Parent = head
+
+    local image = Instance.new("ImageLabel")
+    image.BackgroundTransparency = 1
+    image.Size = UDim2.new(1, 0, 1, 0)
+    image.Image = "rbxassetid://" .. DECAL_ID
+    image.Parent = billboard
+
+    currentBillboard = billboard
+end
+
+local function removeMarker()
+    if currentBillboard then
+        currentBillboard:Destroy()
+        currentBillboard = nil
+    end
+end
+
+local function startCamlock()
+    camlockConnection = RunService.RenderStepped:Connect(function()
+        if not lockedTarget then
+            stopCamlock()
+            return
+        end
+
+        local char = getCharacterFromTarget(lockedTarget)
+        if not char or not char.Parent then
+            removeMarker()
+            return
+        end
+
+        if char ~= lastTargetChar then
+            smoothedPredictedPos = nil
+            lastTargetChar = char
+            createMarker(char)
+        end
+
+        local targetPart = getAimPart(char)
+        if not targetPart then
+            removeMarker()
+            return
+        end
+
+        local aimPos = getAimPosition(targetPart)
+        local targetCFrame = CFrame.new(camera.CFrame.Position, aimPos)
+        camera.CFrame = camera.CFrame:Lerp(targetCFrame, SMOOTHNESS)
+    end)
+end
+
+local function stopCamlock()
+    if camlockConnection then
+        camlockConnection:Disconnect()
+        camlockConnection = nil
+    end
+    lockedTarget = nil
+    lastTargetChar = nil
+    smoothedPredictedPos = nil
+    removeMarker()
+end
+
+local function toggleCamlock()
+    if camlockActive then
+        camlockActive = false
+        stopCamlock()
+    else
+        local target = getClosestTarget()
+        if not target then
+            return
+        end
+        lockedTarget = target
+        lastTargetChar = getCharacterFromTarget(target)
+        if lastTargetChar then createMarker(lastTargetChar) end
+        camlockActive = true
+        startCamlock()
+    end
+end
+
+-- ==================== CAMLOCK MOBILE ====================
+local mobileScreenGui = nil
+local mobileToggleBtn = nil
+
+local function createMobileButton()
+    if mobileScreenGui then mobileScreenGui:Destroy() end
+
+    mobileScreenGui = Instance.new("ScreenGui")
+    mobileScreenGui.Name = "CamlockMobileGui"
+    mobileScreenGui.ResetOnSpawn = false
+    mobileScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+    mobileToggleBtn = Instance.new("TextButton")
+    mobileToggleBtn.Size = UDim2.new(0, 140, 0, 45)
+    mobileToggleBtn.Position = UDim2.new(0.5, -70, 0.5, -22)
+    mobileToggleBtn.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+    mobileToggleBtn.Text = "CAMLOCK OFF"
+    mobileToggleBtn.TextColor3 = Color3.fromRGB(255, 77, 77)
+    mobileToggleBtn.Font = Enum.Font.GothamBlack
+    mobileToggleBtn.TextSize = 18
+    mobileToggleBtn.Parent = mobileScreenGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = mobileToggleBtn
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 2
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Transparency = 0.7
+    stroke.Parent = mobileToggleBtn
+
+    -- Draggable
+    local dragging = false
+    local dragStart, startPos
+
+    mobileToggleBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = mobileToggleBtn.Position
+        end
+    end)
+
+    mobileToggleBtn.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            mobileToggleBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+
+    mobileToggleBtn.MouseButton1Click:Connect(toggleCamlock)
+
+    task.spawn(function()
+        while mobileScreenGui and mobileScreenGui.Parent do
+            if camlockActive then
+                mobileToggleBtn.Text = "CAMLOCK ON"
+                mobileToggleBtn.TextColor3 = Color3.fromRGB(0, 255, 133)
+                mobileToggleBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+            else
+                mobileToggleBtn.Text = "CAMLOCK OFF"
+                mobileToggleBtn.TextColor3 = Color3.fromRGB(255, 77, 77)
+                mobileToggleBtn.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+            end
+            task.wait(0.1)
+        end
+    end)
+end
+
+-- Toggles Callbacks
+Toggles.CamlockMobile.Callback = function(value)
+    if value then
+        createMobileButton()
+    else
+        if mobileScreenGui then
+            mobileScreenGui:Destroy()
+            mobileScreenGui = nil
+            mobileToggleBtn = nil
+        end
+        if camlockActive then
+            toggleCamlock()
+        end
+    end
+end
+
+Toggles.CamlockDPad.Callback = function(value)
+    if value and camlockActive then
+        toggleCamlock()
+    end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if Toggles.CamlockDPad.Value and input.KeyCode == Enum.KeyCode.DPadDown then
+        toggleCamlock()
+    end
+end)
+
+-- ==================== AUTO BLOCK / PUNISH / COUNTER ====================
 local function getNearestPlayer(maxDist)
     local nearest, shortest = nil, maxDist
     local myChar = LocalPlayer.Character
@@ -179,7 +509,7 @@ local function getNearestPlayer(maxDist)
             end
         end
     end
-    return nearest
+    return nearest, shortest
 end
 
 local function isFacingMe(target)
@@ -234,7 +564,6 @@ local function getAnimTypeAndId(target)
         if track.IsPlaying and track.Animation then
             local animId = string.match(track.Animation.AnimationId, "(%d+)")
             if animId then
-                -- Caso especial Martial H3
                 if animId == "15753705218" then
                     return "martial_h3_special", animId
                 end
@@ -268,7 +597,6 @@ local function executePunish()
     end
 end
 
--- Heartbeat principal (mejorado para counter: chequeo explícito de anims y prioridad)
 RunService.Heartbeat:Connect(function()
     if not (Toggles.EnableAutoBlock.Value or Toggles.EnableAutoPunish.Value or Toggles.EnableAutoCounter.Value) then
         return
@@ -283,21 +611,54 @@ RunService.Heartbeat:Connect(function()
         return
     end
 
-    local nearest = getNearestPlayer(Options.MaxDistance.Value)
     local currentTime = tick()
 
+    -- Jun Ulti especial
+    local nearestJunUlti, distJunUlti = getNearestPlayer(50)
+    if nearestJunUlti and nearestJunUlti.Character and nearestJunUlti.Character:FindFirstChild("HumanoidRootPart") then
+        local animType, animId = getAnimTypeAndId(nearestJunUlti)
+        if animType == "block_ulti_jun_short" then
+            if Toggles.EnableAutoBlock.Value and not fDownSent and not isPunishing then
+                sendRequest("FDown")
+                fDownSent = true
+
+                if Toggles.EnableAutoPunish.Value and currentTime - lastAttackTime >= Options.AttackCooldown.Value then
+                    isPunishing = true
+                    task.spawn(function()
+                        task.wait(punishDelays.block_ulti_jun_short)
+                        if fDownSent then 
+                            sendRequest("FUp")
+                            fDownSent = false 
+                        end
+                        executePunish()
+                        lastAttackTime = tick()
+                        isPunishing = false
+                    end)
+                else
+                    task.spawn(function()
+                        task.wait(punishDelays.block_ulti_jun_short)
+                        if fDownSent then
+                            sendRequest("FUp")
+                            fDownSent = false
+                        end
+                    end)
+                end
+                return
+            end
+        end
+    end
+
+    local nearest = getNearestPlayer(Options.MaxDistance.Value)
     if nearest and nearest.Character and nearest.Character:FindFirstChild("HumanoidRootPart") then
         local animType, animId = getAnimTypeAndId(nearest)
 
         if animType then
-            -- Prioridad 1: Counter detrás (mejorado: chequeo si es M1 o cualquier anim seleccionada)
-            if Toggles.EnableAutoCounter.Value and isStrictlyBehindMe(nearest) and animTypes[animId] then  -- Solo para anims seleccionadas
+            if Toggles.EnableAutoCounter.Value and isStrictlyBehindMe(nearest) and animTypes[animId] then
                 if fDownSent then sendRequest("FUp"); fDownSent = false end
                 sendCounterRequest()
                 return
             end
 
-            -- Prioridad 2: Counter de frente para skills específicas
             if Toggles.EnableAutoCounter.Value and table.find(counterFrontAnims, animId) and isFacingMe(nearest) then
                 if fDownSent then sendRequest("FUp"); fDownSent = false end
                 sendCounterRequest()
@@ -311,8 +672,6 @@ RunService.Heartbeat:Connect(function()
                 shouldBlock = Toggles.EnableAutoBlock.Value
                 customBlockDuration = punishDelays.martial_h3_special
             else
-                local delay = punishDelays[animType] or punishDelays.normal
-
                 if animType == "direct" then
                     if Toggles.EnableAutoPunish.Value and currentTime - lastAttackTime >= Options.AttackCooldown.Value and not isPunishing then
                         if fDownSent then sendRequest("FUp"); fDownSent = false end
@@ -324,7 +683,7 @@ RunService.Heartbeat:Connect(function()
                         end)
                     end
                     return
-                elseif string.find(animType, "block_") or string.find(animType, "shinji_m1_") then  -- Incluye customs de Shinji
+                elseif string.find(animType, "block_") and animType ~= "block_ulti_jun_short" or string.find(animType, "shinji_m1_") then
                     shouldBlock = Toggles.EnableAutoBlock.Value
                 elseif animType == "normal" then
                     shouldBlock = Toggles.EnableAutoBlock.Value and (isFacingMe(nearest) or isBehindMe(nearest))
@@ -337,16 +696,13 @@ RunService.Heartbeat:Connect(function()
 
                 if Toggles.EnableAutoPunish.Value and currentTime - lastAttackTime >= Options.AttackCooldown.Value then
                     isPunishing = true
-                    
                     task.spawn(function()
                         local waitTime = customBlockDuration or (punishDelays[animType] or punishDelays.normal)
                         task.wait(waitTime)
-                        
                         if fDownSent then 
                             sendRequest("FUp")
                             fDownSent = false 
                         end
-                        
                         executePunish()
                         lastAttackTime = tick()
                         isPunishing = false
@@ -357,14 +713,13 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
-    -- Liberar bloqueo si no hay amenaza activa
     if fDownSent and not isPunishing and not isAudioBlocking then
         sendRequest("FUp")
         fDownSent = false
     end
 end)
 
--- Audio detection (Shinji) - Solo si está cerca
+-- Shinji Audio Detection
 local targetAudioId = "rbxassetid://107838666135851"
 
 local function tryGetPlayerFromSound(sound)
@@ -382,26 +737,17 @@ local function tryGetPlayerFromSound(sound)
 end
 
 local function onSoundPlayed(sound)
-    if not (Toggles.EnableAutoBlock.Value and Toggles.EnableAutoPunish.Value) then 
-        return 
-    end
+    if not (Toggles.EnableAutoBlock.Value and Toggles.EnableAutoPunish.Value) then return end
 
     local player, character = tryGetPlayerFromSound(sound)
-    if not player or player == LocalPlayer then 
-        return 
-    end
+    if not player or player == LocalPlayer then return end
 
     local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     local enemyRoot = character and character:FindFirstChild("HumanoidRootPart")
-
-    if not myRoot or not enemyRoot then 
-        return 
-    end
+    if not myRoot or not enemyRoot then return end
 
     local distance = (myRoot.Position - enemyRoot.Position).Magnitude
-    if distance > Options.AudioMaxDistance.Value then 
-        return 
-    end
+    if distance > Options.AudioMaxDistance.Value then return end
 
     task.spawn(function()
         isAudioBlocking = true
@@ -419,7 +765,6 @@ local function onSoundPlayed(sound)
     end)
 end
 
--- Conectar detección de audio
 local function setupAudioDetection()
     for _, obj in ipairs(game:GetDescendants()) do
         if obj:IsA("Sound") and obj.SoundId == targetAudioId then
@@ -480,7 +825,4 @@ SaveManager:BuildConfigSection(Tabs["UI Settings"])
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
 SaveManager:LoadAutoloadConfig()
 
--- Inicialización
-Library:Notify("Script cargado correctamente ✓", "Mejoras: Delays Shinji M1s ajustados, counter detrás mejorado", 5)
-print("Auto Block + Punish + Counter - Actualizado 2025.12.28")
-print("Mejoras: Shinji M1 3 (0.4s), M1 4 (0.5s); Counter detrás más sensible")
+print("Auto Block + Punish + Counter + Camlock - Actualizado 2025.12.29")
